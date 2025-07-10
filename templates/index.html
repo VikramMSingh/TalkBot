@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coach for Social Anxiety & English</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for chat area */
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Inter font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Basic animation for listening indicator */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pulse-custom {
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+
+        /* Custom message box styling */
+        .message-box-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .message-box-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl flex flex-col h-[80vh] md:h-[90vh]">
+        <!-- Header -->
+        <div class="p-4 bg-blue-600 text-white rounded-t-xl flex items-center justify-between">
+            <h1 class="text-2xl font-bold">AI Coach for Social Anxiety & English</h1>
+            <span class="text-sm opacity-80">Your supportive AI companion</span>
+        </div>
+
+        <!-- Chat Display Area -->
+        <div id="chat-container" class="flex-grow p-4 overflow-y-auto space-y-4 chat-container">
+            <div class="text-center text-gray-500 italic mt-10">
+                Start by typing or speaking a message below. I'm here to help you practice and get feedback on social interactions and improve your English.
+            </div>
+        </div>
+
+        <!-- Message Input Area -->
+        <div class="p-4 border-t border-gray-200 flex items-center bg-gray-50 rounded-b-xl">
+            <button id="microphone-button"
+                    class="p-3 mr-3 rounded-full bg-red-500 text-white shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Record Audio"
+                    disabled>
+                <!-- Microphone Icon (Lucide-react equivalent SVG) -->
+                <svg id="mic-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mic">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" x2="12" y1="19" y2="22"/>
+                </svg>
+            </button>
+            <input
+                type="text"
+                id="message-input"
+                class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+                placeholder="Type your message here..."
+                disabled
+            />
+            <button
+                id="send-button"
+                class="ml-3 px-6 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled
+            >
+                Send
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const microphoneButton = document.getElementById('microphone-button');
+        const micIcon = document.getElementById('mic-icon');
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let isProcessing = false; // To prevent multiple requests
+
+        // Function to show a custom message box (instead of alert)
+        function showMessageBox(message) {
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 z-50 message-box-overlay';
+            overlay.innerHTML = `
+                <div class="message-box-content">
+                    <p class="text-lg mb-4">${message}</p>
+                    <button id="closeMessageBox" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">OK</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            document.getElementById('closeMessageBox').onclick = () => document.body.removeChild(overlay);
+        }
+
+        // Function to add a message to the chat display
+        function addMessage(role, text, audioBase64 = null) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+
+            const messageBubble = document.createElement('div');
+            messageBubble.className = `max-w-[70%] p-3 rounded-lg shadow-md ${
+                role === 'user'
+                    ? 'bg-blue-500 text-white rounded-br-none'
+                    : 'bg-gray-200 text-gray-800 rounded-bl-none'
+            }`;
+            messageBubble.textContent = text;
+
+            if (role === 'model' && audioBase64) {
+                const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+                const playButton = document.createElement('button');
+                playButton.className = 'ml-2 p-1 rounded-full bg-blue-400 hover:bg-blue-500 text-white';
+                playButton.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                `;
+                playButton.onclick = () => audio.play();
+                messageBubble.appendChild(playButton);
+            }
+
+            messageWrapper.appendChild(messageBubble);
+            chatContainer.appendChild(messageWrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight; // Auto-scroll to bottom
+        }
+
+        // Function to add a loading indicator
+        function addLoadingIndicator() {
+            const loadingWrapper = document.createElement('div');
+            loadingWrapper.id = 'loading-indicator';
+            loadingWrapper.className = 'flex justify-start';
+            loadingWrapper.innerHTML = `
+                <div class="max-w-[70%] p-3 rounded-lg shadow-md bg-gray-200 text-gray-800 rounded-bl-none">
+                    <div class="flex items-center">
+                        <svg class="animate-spin h-5 w-5 text-gray-600 mr-3" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Thinking...
+                    </div>
+                </div>
+            `;
+            chatContainer.appendChild(loadingWrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Function to remove the loading indicator
+        function removeLoadingIndicator() {
+            const loadingIndicator = document.getElementById('loading-indicator');
+            if (loadingIndicator) {
+                loadingIndicator.remove();
+            }
+        }
+
+        // Function to enable/disable input elements
+        function setInputState(enabled) {
+            messageInput.disabled = !enabled;
+            sendButton.disabled = !enabled;
+            microphoneButton.disabled = !enabled;
+            isProcessing = !enabled;
+        }
+
+        // --- Event Listeners ---
+
+        // Send message on button click or Enter key press
+        sendButton.addEventListener('click', async () => {
+            if (messageInput.value.trim() === '' || isProcessing) return;
+            setInputState(false); // Disable inputs during processing
+            addMessage('user', messageInput.value);
+            addLoadingIndicator();
+
+            const messageText = messageInput.value;
+            messageInput.value = ''; // Clear input immediately
+
+            try {
+                const response = await fetch('/chat_text', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: messageText }),
+                });
+                const data = await response.json();
+
+                removeLoadingIndicator();
+                if (response.ok) {
+                    addMessage('model', data.text, data.audio);
+                } else {
+                    addMessage('model', `Error: ${data.error || 'Something went wrong.'}`);
+                }
+            } catch (error) {
+                console.error('Error sending text message:', error);
+                removeLoadingIndicator();
+                addMessage('model', `Network error: ${error.message}. Please try again.`);
+            } finally {
+                setInputState(true); // Re-enable inputs
+            }
+        });
+
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !isProcessing) {
+                sendButton.click();
+            }
+        });
+
+        // Microphone button functionality
+        microphoneButton.addEventListener('click', async () => {
+            if (isProcessing) return;
+
+            if (!isRecording) {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); // Use webm for broader compatibility
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'audio.webm');
+
+                        setInputState(false); // Disable inputs during processing
+                        addLoadingIndicator();
+
+                        try {
+                            const response = await fetch('/chat_audio', {
+                                method: 'POST',
+                                body: formData,
+                            });
+                            const data = await response.json();
+
+                            removeLoadingIndicator();
+                            if (response.ok) {
+                                // Display transcribed user text and AI response
+                                if (data.user_text) {
+                                    addMessage('user', `(Voice) ${data.user_text}`);
+                                } else {
+                                    addMessage('user', '(Voice message sent)'); // Fallback if no user_text returned
+                                }
+                                addMessage('model', data.text, data.audio);
+                            } else {
+                                addMessage('model', `Error: ${data.error || 'Something went wrong.'}`);
+                            }
+                        } catch (error) {
+                            console.error('Error sending audio message:', error);
+                            removeLoadingIndicator();
+                            addMessage('model', `Network error: ${error.message}. Please try again.`);
+                        } finally {
+                            setInputState(true); // Re-enable inputs
+                            stream.getTracks().forEach(track => track.stop()); // Stop microphone access
+                        }
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    microphoneButton.classList.add('animate-pulse-custom', 'bg-red-700'); // Visual feedback for recording
+                    micIcon.innerHTML = `<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/><line x1="19" x2="19" y1="10" y2="10"/><line x1="5" x2="5" y1="10" y2="10"/>`; // Change icon to indicate recording
+                    messageInput.placeholder = "Recording...";
+                    messageInput.disabled = true; // Disable text input during recording
+                    sendButton.disabled = true; // Disable send button during recording
+
+                } catch (err) {
+                    console.error('Error accessing microphone:', err);
+                    showMessageBox('Could not access microphone. Please ensure it is connected and permissions are granted.');
+                    setInputState(true); // Re-enable inputs if microphone access fails
+                }
+            } else {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+                microphoneButton.classList.remove('animate-pulse-custom', 'bg-red-700');
+                micIcon.innerHTML = `<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>`; // Revert icon
+                messageInput.placeholder = "Type your message here...";
+            }
+        });
+
+        // Initial state setup on page load
+        window.onload = () => {
+            setInputState(true); // Enable inputs once page is loaded
+        };
+
+    </script>
+</body>
+</html>
