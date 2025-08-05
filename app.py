@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from pydub import AudioSegment
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv('gemini.env')
 
 app = Flask(__name__)
 CORS(app) # Enable CORS for all routes, useful for development
