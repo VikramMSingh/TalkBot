@@ -5,7 +5,6 @@ LLMSpeechReview is a web application designed to help users improve their social
 ![Built with Gemini](https://img.shields.io/badge/Built%20with-Gemini-blueviolet)
 ![Powered by Flask](https://img.shields.io/badge/Powered%20by-Flask-lightgrey)
 ![Uses Google Speech Recognition](https://img.shields.io/badge/Speech%20Recognition-Google-yellowgreen)
-![Text-to-Speech-gTTS-orange)
 
 ## Features
 
