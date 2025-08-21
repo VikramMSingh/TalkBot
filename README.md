@@ -2,6 +2,11 @@
 
 LLMSpeechReview is a web application designed to help users improve their social anxiety and spoken English skills using AI-powered feedback. The app allows users to interact via text or voice, receive constructive and empathetic feedback, and listen to AI-generated responses.
 
+![Built with Gemini](https://img.shields.io/badge/Built%20with-Gemini-blueviolet)
+![Powered by Flask](https://img.shields.io/badge/Powered%20by-Flask-lightgrey)
+![Uses Google Speech Recognition](https://img.shields.io/badge/Speech%20Recognition-Google-yellowgreen)
+![Text-to-Speech-gTTS-orange)
+
 ## Features
 
 - **Text and Voice Input:** Communicate with the AI using either text or audio messages.
